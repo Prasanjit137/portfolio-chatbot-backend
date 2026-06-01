@@ -1,0 +1,4 @@
+Prasanjit's key projects:
+1. Ollama‑powered Portfolio Chatbot – a RAG‑based conversational agent that answers questions about him.
+2. Wearable Safety Device – IoT + AI device for women’s safety using edge computing.
+3. Multi‑Agent RAG System – built with LangChain and AutoGen for legal document analysis.

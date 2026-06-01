@@ -1,0 +1,1 @@
+Prasanjit Sarkar is an AI engineer with 2+ years of experience. He specializes in autonomous agentic workflows and scalable GenAI systems. He has built RAG pipelines, fine‑tuned LLMs, and integrated AI into full‑stack applications.
