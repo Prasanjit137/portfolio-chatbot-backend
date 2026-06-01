@@ -1,12 +1,11 @@
 import os
 import pickle
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 KNOWLEDGE_DIR = "my_knowledge"
 CHUNK_SIZE = 300
 CHUNK_OVERLAP = 50
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"   # small, fast, runs locally
 
 def split_text(text, chunk_size=300, overlap=50):
     chunks = []
@@ -25,7 +24,6 @@ def split_text(text, chunk_size=300, overlap=50):
     return chunks
 
 def main():
-    # 1. Load and chunk documents
     all_chunks = []
     for filename in os.listdir(KNOWLEDGE_DIR):
         if not filename.endswith(".txt"):
@@ -37,20 +35,23 @@ def main():
         print(f"{filename}: {len(chunks)} chunks")
     print(f"Total chunks: {len(all_chunks)}")
 
-    # 2. Create embeddings using local sentence‑transformer
-    print("Loading embedding model...")
-    model = SentenceTransformer(EMBEDDING_MODEL)
-    print("Computing embeddings...")
-    embeddings = model.encode(all_chunks, show_progress_bar=True)
-    embeddings = np.array(embeddings).astype('float32')
-    print(f"Embeddings shape: {embeddings.shape}")
+    # Create TF‑IDF vectors
+    print("Creating TF‑IDF vectors...")
+    vectorizer = TfidfVectorizer(max_features=300, stop_words='english')
+    tfidf_matrix = vectorizer.fit_transform(all_chunks)   # sparse matrix
+    print(f"TF‑IDF matrix shape: {tfidf_matrix.shape}")
 
-    # 3. Save to disk
+    # Save chunks, vectorizer, and matrix
     os.makedirs("rag_data", exist_ok=True)
     with open("rag_data/chunks.pkl", "wb") as f:
         pickle.dump(all_chunks, f)
-    np.save("rag_data/embeddings.npy", embeddings)
-    print("✅ Saved chunks and embeddings to rag_data/")
+    with open("rag_data/vectorizer.pkl", "wb") as f:
+        pickle.dump(vectorizer, f)
+    # Save the matrix as a dense array if it's small, else keep sparse (but we'll need it dense for cosine later)
+    # For small document sets, we can convert to dense.
+    tfidf_dense = tfidf_matrix.toarray().astype('float32')
+    np.save("rag_data/tfidf_embeddings.npy", tfidf_dense)
+    print("✅ Saved TF‑IDF embeddings and vectorizer to rag_data/")
 
 if __name__ == "__main__":
     main()

@@ -4,37 +4,25 @@ import requests
 import pickle
 import numpy as np
 from collections import defaultdict
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Load chunks and embeddings
+# Load data
 with open("rag_data/chunks.pkl", "rb") as f:
     chunks = pickle.load(f)
-embeddings = np.load("rag_data/embeddings.npy")
+with open("rag_data/vectorizer.pkl", "rb") as f:
+    vectorizer = pickle.load(f)
+embeddings = np.load("rag_data/tfidf_embeddings.npy")
 print(f"Loaded {len(chunks)} chunks, embeddings shape {embeddings.shape}")
 
-def cosine_similarity(a, b):
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
 def retrieve_context(query, k=3):
-    # Get query embedding (must match the same model)
-    # Note: For this to work, we need to embed the query using the same model.
-    # We'll use a local SentenceTransformer model – but to avoid loading the model
-    # on your Mac, we can offload this to the HF Space embedding API (since it's just one call per query).
-    # However, that would require nomic-embed-text. Alternative: load the model on your Mac (it's small enough?).
-    # To keep it light, we'll use the HF Space's embedding API if nomic-embed-text becomes available.
-    # But you said you want to avoid that. So we'll use a tiny local model on the Mac as well.
-    # Since the model is only 80 MB and used once per query (not heavy), it's acceptable.
-    # Let's implement it with local model, but we can also use the precomputed embeddings without loading the model? No, we need to embed the query.
-    # Simpler: use keyword matching for retrieval, but you asked for embeddings.
-    # I'll provide a version that loads the same model locally on the Mac (it will work, but if you face memory issues, switch to keyword).
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    q_emb = model.encode([query])[0].astype('float32')
-    sims = [cosine_similarity(q_emb, emb) for emb in embeddings]
-    top_idx = np.argsort(sims)[-k:][::-1]
-    return "\n\n".join([chunks[i] for i in top_idx if sims[i] > 0.2])
-
-# If you prefer to avoid loading the model on your Mac, replace retrieve_context with the keyword version.
-# For now, we'll keep it as is – the model is small and will load once at startup.
+    # Transform query into the same TF‑IDF space
+    query_vec = vectorizer.transform([query]).toarray()
+    # Compute cosine similarity
+    sims = cosine_similarity(query_vec, embeddings)[0]
+    top_indices = np.argsort(sims)[-k:][::-1]
+    # Only return if similarity > 0.1 (avoid random matches)
+    results = [chunks[i] for i in top_indices if sims[i] > 0.1]
+    return "\n\n".join(results) if results else ""
 
 SYSTEM_PROMPT = """You are Prasanjit Sarkar, an AI engineer and full‑stack developer. 
 You have 2+ years of experience architecting autonomous agentic workflows and scalable GenAI systems. 
@@ -57,9 +45,9 @@ def chat():
     if not user_input:
         return jsonify({"error": "Missing chatInput"}), 400
 
-    context = retrieve_context(user_input, k=3) if chunks else ""
+    context = retrieve_context(user_input, k=3)
     if context:
-        system_msg = f"{SYSTEM_PROMPT}\n\nRelevant information:\n{context}\n\nUse this to answer accurately."
+        system_msg = f"{SYSTEM_PROMPT}\n\nRelevant information from my documents:\n{context}\n\nUse this to answer accurately."
     else:
         system_msg = SYSTEM_PROMPT
 
