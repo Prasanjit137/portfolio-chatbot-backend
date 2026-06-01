@@ -1,0 +1,5 @@
+Prasanjit Sarkar has architected and delivered over 10 high-impact AI and production engineering projects.
+He engineered a state-of-the-art Multi-Modal Standard Operating Procedure (SOP) Generator 2.0 utilizing multi-source data ingestion and agentic orchestration workflows.
+He successfully researched and built a smart wearable safety device, publishing a corresponding peer-reviewed technical paper via Springer Nature Link in August 2021.
+He developed RozgarDo, an end-to-end job board platform designed exclusively to bridge blue-collar workers and employers, featuring a high-end glassmorphism aesthetic, smooth UI animations, and robust onboarding states.
+Prasanjit has comprehensive hardware prototyping and embedded systems experience. He frequently builds edge devices using ESP32 and ESP8266 modules, ArUco markers for computer-vision/augmented reality, and I2C hardware configurations with MPU6050 sensors.

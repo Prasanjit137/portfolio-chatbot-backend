@@ -1,48 +1,62 @@
+# app.py
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 import pickle
-import re
+import numpy as np
 from collections import defaultdict
 
-# Load chunks
-with open("rag_data/chunks.pkl", "rb") as f:
-    chunks = pickle.load(f)
-print(f"Loaded {len(chunks)} chunks")
+OLLAMA_API_URL = "https://Prasanjit137-ollama-api.hf.space"
+DEFAULT_MODEL = "llama3.2:1b"
+EMBEDDING_MODEL = "nomic-embed-text"
 
-STOPWORDS = {
-    'i', 'me', 'my', 'you', 'he', 'she', 'it', 'we', 'they', 'a', 'an', 'the',
-    'and', 'or', 'but', 'if', 'because', 'as', 'what', 'which', 'this', 'that',
-    'these', 'those', 'then', 'just', 'so', 'than', 'such', 'both', 'through',
-    'about', 'for', 'is', 'of', 'while', 'during', 'to', 'from', 'in', 'on',
-    'with', 'without', 'be', 'been', 'was', 'were', 'are', 'am', 'do', 'does',
-    'did', 'doing', 'have', 'has', 'having', 'not', 'no', 'yes', 'at', 'by',
-    'after', 'before', 'up', 'down', 'into', 'onto', 'off', 'out', 'over',
-    'under', 'again', 'further', 'then', 'once', 'here', 'there', 'all', 'any',
-    'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor',
-    'only', 'own', 'same', 'so', 'than', 'that', 'then', 'these', 'those',
-    'very', 'just', 'but', 'do', 'does', 'did', 'doing', 'have', 'has',
-    'having', 'don’t', 'cant', 'cannot', 'should', 'would', 'could', 'will',
-    'shall', 'may', 'might', 'must'
-}
+# Check safely if embeddings have been built yet
+CHUNKS_PATH = "rag_data/chunks.pkl"
+EMBEDDINGS_PATH = "rag_data/embeddings.npy"
 
-def extract_keywords(text):
-    words = re.findall(r'\b[a-z]+\b', text.lower())
-    return [w for w in words if w not in STOPWORDS and len(w) > 2]
+chunks = []
+embeddings = None
 
-def retrieve_context(query, top_k=3):
-    q_keywords = set(extract_keywords(query))
-    if not q_keywords:
+if os.path.exists(CHUNKS_PATH) and os.path.exists(EMBEDDINGS_PATH):
+    with open(CHUNKS_PATH, "rb") as f:
+        chunks = pickle.load(f)
+    embeddings = np.load(EMBEDDINGS_PATH)
+    print(f"Loaded {len(chunks)} chunks, embeddings shape {embeddings.shape}")
+else:
+    print("⚠️ Warning: Vector data files not found. Run ingestion or push to documents/ first.")
+
+def get_query_embedding(text):
+    resp = requests.post(f"{OLLAMA_API_URL}/api/embeddings",
+                         json={"model": EMBEDDING_MODEL, "prompt": text},
+                         timeout=30)
+    if resp.status_code != 200:
+        resp = requests.post(f"{OLLAMA_API_URL}/api/embeddings",
+                             json={"model": DEFAULT_MODEL, "prompt": text},
+                             timeout=30)
+    resp.raise_for_status()
+    return np.array(resp.json()["embedding"], dtype=np.float32)
+
+def cosine_similarity(a, b):
+    denom = np.linalg.norm(a) * np.linalg.norm(b)
+    if denom == 0:
+        return 0
+    return np.dot(a, b) / denom
+
+def retrieve_context(query, k=3):
+    global chunks, embeddings
+    if not chunks or embeddings is None:
         return ""
-    scored = []
-    for chunk in chunks:
-        chunk_keywords = set(extract_keywords(chunk))
-        score = len(q_keywords & chunk_keywords)
-        if score > 0:
-            scored.append((score, chunk))
-    scored.sort(reverse=True, key=lambda x: x[0])
-    selected = [chunk for _, chunk in scored[:top_k]]
-    return "\n\n".join(selected)
+        
+    q_emb = get_query_embedding(query)
+    similarities = []
+    for i, doc_emb in enumerate(embeddings):
+        sim = cosine_similarity(q_emb, doc_emb)
+        similarities.append((sim, i))
+        
+    similarities.sort(reverse=True, key=lambda x: x[0])
+    top_indices = [idx for _, idx in similarities[:k]]
+    return "\n\n".join([chunks[i] for i in top_indices])
 
 SYSTEM_PROMPT = """You are Prasanjit Sarkar, an AI engineer and full‑stack developer. 
 You have 2+ years of experience architecting autonomous agentic workflows and scalable GenAI systems. 
@@ -54,46 +68,51 @@ conversations = defaultdict(list)
 app = Flask(__name__)
 CORS(app)
 
-OLLAMA_API_URL = "https://Prasanjit137-ollama-api.hf.space"
-CHAT_MODEL = "llama3.2:1b"
-
 @app.route('/chat', methods=['POST'])
 def chat():
-    data = request.get_json()
+    data = request.get_json() or {}
     user_input = data.get('chatInput')
     session_id = data.get('sessionId', 'default')
     if not user_input:
         return jsonify({"error": "Missing chatInput"}), 400
 
-    context = retrieve_context(user_input)
-    if context:
-        system_msg = f"{SYSTEM_PROMPT}\n\nRelevant information from my documents:\n{context}\n\nUse this to answer accurately."
-    else:
-        system_msg = SYSTEM_PROMPT
-
     history = conversations[session_id]
+
+    try:
+        context = retrieve_context(user_input)
+    except Exception as e:
+        print(f"Retrieval error: {e}")
+        context = ""
+
+    system_msg = SYSTEM_PROMPT
+    if context:
+        system_msg += f"\n\nRelevant information from my documents:\n{context}\n\nUse this to answer accurately."
+    
     messages = [{"role": "system", "content": system_msg}]
     messages.extend(history)
     messages.append({"role": "user", "content": user_input})
 
+    payload = {"model": DEFAULT_MODEL, "messages": messages, "stream": False}
     try:
-        resp = requests.post(f"{OLLAMA_API_URL}/api/chat",
-                             json={"model": CHAT_MODEL, "messages": messages, "stream": False},
-                             timeout=90)
+        resp = requests.post(f"{OLLAMA_API_URL}/api/chat", json=payload, timeout=90)
         resp.raise_for_status()
         reply = resp.json().get("message", {}).get("content", "")
+        
         history.append({"role": "user", "content": user_input})
         history.append({"role": "assistant", "content": reply})
+        
         if len(history) > 20:
             conversations[session_id] = history[-20:]
+            
         return jsonify({"output": reply})
     except Exception as e:
-        print(e)
-        return jsonify({"output": "I'm having trouble. Please try again later."}), 500
+        print(f"API Error: {e}")
+        return jsonify({"output": "Error handling request. Please try again."}), 500
 
 @app.route('/clear', methods=['POST'])
 def clear():
-    sess = request.get_json().get('sessionId', 'default')
+    data = request.get_json() or {}
+    sess = data.get('sessionId', 'default')
     if sess in conversations:
         del conversations[sess]
     return jsonify({"status": "cleared"})

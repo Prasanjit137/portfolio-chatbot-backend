@@ -1,31 +1,47 @@
-name: Build RAG Index
+name: Update RAG Embeddings
 
 on:
   push:
     paths:
-      - 'my_knowledge/**'
-      - 'ingest.py'
+      - 'documents/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  build:
+  build-embeddings:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests numpy
 
-      - name: Run ingest.py
-        run: python ingest.py
+    - name: Run Ingestion Script
+      run: python ingest.py
 
-      - name: Commit and push rag_data
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Update RAG data"
-          file_pattern: rag_data/
+    - name: Commit and Push Updated Matrix
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # Ensure directory is tracked
+        mkdir -p rag_data
+        git add rag_data/chunks.pkl rag_data/embeddings.npy || true
+        
+        if git diff --cached --quiet; then
+          echo "No changes in vectors detected."
+        else
+          git commit -m "chore: auto-rebuild RAG vectors [skip ci]"
+          git push origin HEAD:${{ github.ref }}
+        fi

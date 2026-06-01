@@ -1,0 +1,5 @@
+Prasanjit Sarkar is an AI engineer with 2+ years of experience. He specializes in autonomous agentic workflows and scalable GenAI systems. He has built RAG pipelines, fine‑tuned LLMs, and integrated AI into full‑stack applications.Prasanjit Sarkar is an AI engineer and full‑stack developer with over 2+ years of experience architecting autonomous agentic workflows and scalable GenAI systems. 
+His key technical expertise includes building multi‑agent systems, specialized Retrieval-Augmented Generation (RAG) architectures, LangChain, LangGraph agentic pipelines, and LLM fine‑tuning.
+He currently works as a Project Engineer and Pega Developer at Wipro, a role held since September 2024.
+Prasanjit holds a Master of Technology (M.Tech) in Nanoscience and Technology from Jadavpur University and a Bachelor of Technology (B.Tech) in Electrical Engineering from Siliguri Institute of Technology.
+He is highly proficient in full-stack web architectures, consistently leveraging modern frameworks like React.js for building slick, premium user interfaces and Python-based frameworks like FastAPI and Flask for writing highly optimized back-end microservices.
