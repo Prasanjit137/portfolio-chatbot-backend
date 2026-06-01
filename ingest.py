@@ -1,20 +1,20 @@
 import os
 import pickle
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 KNOWLEDGE_DIR = "my_knowledge"
-CHUNK_SIZE = 300
-CHUNK_OVERLAP = 50
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 100
 
-def split_text(text, chunk_size=300, overlap=50):
+def split_text(text, chunk_size=500, overlap=100):
     chunks = []
     start = 0
-    while start < len(text):
-        end = min(start + chunk_size, len(text))
-        if end < len(text):
-            for i in range(end, max(start, end-100), -1):
-                if text[i] in (' ', '\n', '.', '!', '?'):
+    text_len = len(text)
+    while start < text_len:
+        end = min(start + chunk_size, text_len)
+        if end < text_len:
+            # Try to break at space, newline, or punctuation
+            for i in range(end, max(start, end-150), -1):
+                if i < text_len and text[i] in (' ', '\n', '.', '!', '?'):
                     end = i + 1
                     break
         chunk = text[start:end].strip()
@@ -34,24 +34,10 @@ def main():
         all_chunks.extend(chunks)
         print(f"{filename}: {len(chunks)} chunks")
     print(f"Total chunks: {len(all_chunks)}")
-
-    # Create TF‑IDF vectors
-    print("Creating TF‑IDF vectors...")
-    vectorizer = TfidfVectorizer(max_features=300, stop_words='english')
-    tfidf_matrix = vectorizer.fit_transform(all_chunks)   # sparse matrix
-    print(f"TF‑IDF matrix shape: {tfidf_matrix.shape}")
-
-    # Save chunks, vectorizer, and matrix
     os.makedirs("rag_data", exist_ok=True)
     with open("rag_data/chunks.pkl", "wb") as f:
         pickle.dump(all_chunks, f)
-    with open("rag_data/vectorizer.pkl", "wb") as f:
-        pickle.dump(vectorizer, f)
-    # Save the matrix as a dense array if it's small, else keep sparse (but we'll need it dense for cosine later)
-    # For small document sets, we can convert to dense.
-    tfidf_dense = tfidf_matrix.toarray().astype('float32')
-    np.save("rag_data/tfidf_embeddings.npy", tfidf_dense)
-    print("✅ Saved TF‑IDF embeddings and vectorizer to rag_data/")
+    print("✅ Saved chunks to rag_data/chunks.pkl")
 
 if __name__ == "__main__":
     main()
